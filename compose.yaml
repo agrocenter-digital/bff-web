@@ -1,0 +1,42 @@
+name: agrocenter-bff
+
+services:
+  bff-web:
+    image: agrocenter/bff-web:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev,docker}
+      DEV_JWT_SECRET: ${DEV_JWT_SECRET:?Configura DEV_JWT_SECRET en el archivo .env}
+      DEV_JWT_ISSUER: ${DEV_JWT_ISSUER:-http://localhost:8081/dev-issuer}
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:-http://localhost:9999/mock-cognito}
+      COGNITO_JWK_SET_URI: ${COGNITO_JWK_SET_URI:-http://localhost:9999/mock-cognito/.well-known/jwks.json}
+      COGNITO_AUDIENCE: ${COGNITO_AUDIENCE:-agrocenter-api}
+      MS_INVENTARIO_URL: ${MS_INVENTARIO_URL:-http://host.docker.internal:8081}
+      MS_VENTAS_URL: ${MS_VENTAS_URL:-http://host.docker.internal:8082}
+      MS_COMPRAS_URL: ${MS_COMPRAS_URL:-http://host.docker.internal:8083}
+      MS_INVENTARIO_CONNECT_TIMEOUT: ${MS_INVENTARIO_CONNECT_TIMEOUT:-2s}
+      MS_INVENTARIO_RESPONSE_TIMEOUT: ${MS_INVENTARIO_RESPONSE_TIMEOUT:-4s}
+      MS_VENTAS_CONNECT_TIMEOUT: ${MS_VENTAS_CONNECT_TIMEOUT:-2s}
+      MS_VENTAS_RESPONSE_TIMEOUT: ${MS_VENTAS_RESPONSE_TIMEOUT:-6s}
+      MS_COMPRAS_CONNECT_TIMEOUT: ${MS_COMPRAS_CONNECT_TIMEOUT:-2s}
+      MS_COMPRAS_RESPONSE_TIMEOUT: ${MS_COMPRAS_RESPONSE_TIMEOUT:-4s}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s

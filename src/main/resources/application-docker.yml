@@ -1,0 +1,7 @@
+services:
+  inventory:
+    base-url: ${MS_INVENTARIO_URL:http://host.docker.internal:8081}
+  sales:
+    base-url: ${MS_VENTAS_URL:http://host.docker.internal:8082}
+  purchases:
+    base-url: ${MS_COMPRAS_URL:http://host.docker.internal:8083}

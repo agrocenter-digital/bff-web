@@ -1,0 +1,12 @@
+agrocenter:
+  security:
+    dev:
+      jwt-secret: ${DEV_JWT_SECRET}
+      issuer: ${DEV_JWT_ISSUER:http://localhost:8081/dev-issuer}
+      audience: ${COGNITO_AUDIENCE:agrocenter-api}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

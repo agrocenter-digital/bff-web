@@ -1,0 +1,22 @@
+agrocenter:
+  security:
+    jwt:
+      issuer-uri: ${COGNITO_ISSUER_URI}
+      jwk-set-uri: ${COGNITO_JWK_SET_URI}
+      audience: ${COGNITO_AUDIENCE}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS}
+
+services:
+  inventory:
+    base-url: ${MS_INVENTARIO_URL}
+  sales:
+    base-url: ${MS_VENTAS_URL}
+  purchases:
+    base-url: ${MS_COMPRAS_URL}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
