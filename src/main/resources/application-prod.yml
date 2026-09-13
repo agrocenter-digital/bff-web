@@ -5,7 +5,8 @@ agrocenter:
       jwk-set-uri: ${COGNITO_JWK_SET_URI}
       audience: ${COGNITO_AUDIENCE}
   cors:
-    allowed-origins: ${ALLOWED_ORIGINS}
+    allowed-origins: ${ALLOWED_ORIGINS:https://front-web-seven.vercel.app,http://localhost:3000,http://localhost:5173}
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app}
 
 services:
   inventory:

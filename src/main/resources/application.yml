@@ -21,7 +21,8 @@ agrocenter:
       issuer: ${DEV_JWT_ISSUER:http://localhost:8081/dev-issuer}
       audience: ${COGNITO_AUDIENCE:agrocenter-api}
   cors:
-    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origins: ${ALLOWED_ORIGINS:https://front-web-seven.vercel.app,http://localhost:3000,http://localhost:5173}
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app}
 
 services:
   inventory:

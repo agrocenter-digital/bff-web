@@ -18,6 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -30,11 +31,12 @@ public class SecurityConfig {
             HttpSecurity http,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler,
-            JwtAuthenticationConverter jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            CorsConfigurationSource corsConfigurationSource
     ) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(Customizer.withDefaults())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -69,24 +71,44 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.allowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
+
+        List<String> patterns = new ArrayList<>();
+        if (properties.allowedOriginPatterns() != null && !properties.allowedOriginPatterns().isEmpty()) {
+            patterns.addAll(properties.allowedOriginPatterns());
+        }
+        if (properties.allowedOrigins() != null && !properties.allowedOrigins().isEmpty()) {
+            patterns.addAll(properties.allowedOrigins());
+        }
+        if (patterns.isEmpty()) {
+            patterns = List.of(
+                    "https://front-web-seven.vercel.app",
+                    "https://*.vercel.app",
+                    "http://localhost:3000",
+                    "http://localhost:5173"
+            );
+        }
+        configuration.setAllowedOriginPatterns(patterns);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of(
                 HttpHeaders.AUTHORIZATION,
                 HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                HttpHeaders.ORIGIN,
+                "X-Requested-With",
                 "Idempotency-Key",
                 "X-Correlation-ID"
         ));
         configuration.setExposedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION,
                 HttpHeaders.LOCATION,
                 "Idempotent-Replay",
                 "X-Correlation-ID"
         ));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/bff/**", configuration);
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }
