@@ -79,8 +79,14 @@ public class RestClientConfig {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(properties.responseTimeout());
 
+        String resolvedUrl = sanitizeBaseUrl(properties.baseUrl(), service);
+        org.springframework.web.util.DefaultUriBuilderFactory uriBuilderFactory =
+                new org.springframework.web.util.DefaultUriBuilderFactory(resolvedUrl);
+        uriBuilderFactory.setEncodingMode(org.springframework.web.util.DefaultUriBuilderFactory.EncodingMode.URI_COMPONENT);
+
         return builder.clone()
-                .baseUrl(properties.baseUrl())
+                .baseUrl(resolvedUrl)
+                .uriBuilderFactory(uriBuilderFactory)
                 .requestFactory(requestFactory)
                 .requestInterceptor(forwardedHeadersInterceptor)
                 .defaultStatusHandler(
@@ -88,5 +94,17 @@ public class RestClientConfig {
                         (request, response) -> errorMapper.handle(service, request, response)
                 )
                 .build();
+    }
+
+    private String sanitizeBaseUrl(String url, String service) {
+        if (url == null || url.isBlank() || ServiceProperties.isUnresolvedPlaceholder(url)) {
+            return switch (service) {
+                case "ms-inventario" -> "http://ms-inventario-svc:8081";
+                case "ms-ventas" -> "http://ms-ventas-svc:8082";
+                case "ms-compras" -> "http://ms-compras-svc:8083";
+                default -> "http://localhost:8080";
+            };
+        }
+        return url.trim().replaceAll("/+$", "");
     }
 }

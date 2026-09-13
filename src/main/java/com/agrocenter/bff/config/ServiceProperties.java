@@ -11,16 +11,28 @@ public record ServiceProperties(
         Endpoint purchases
 ) {
     public ServiceProperties {
-        inventory = requireEndpoint(inventory, "inventory");
-        sales = requireEndpoint(sales, "sales");
-        purchases = requireEndpoint(purchases, "purchases");
+        inventory = sanitizeEndpoint(inventory, "inventory", "http://ms-inventario-svc:8081");
+        sales = sanitizeEndpoint(sales, "sales", "http://ms-ventas-svc:8082");
+        purchases = sanitizeEndpoint(purchases, "purchases", "http://ms-compras-svc:8083");
     }
 
-    private static Endpoint requireEndpoint(Endpoint endpoint, String name) {
+    private static Endpoint sanitizeEndpoint(Endpoint endpoint, String name, String defaultUrl) {
         if (endpoint == null) {
-            throw new IllegalArgumentException("Falta la configuracion services." + name);
+            return new Endpoint(defaultUrl, Duration.ofSeconds(2), Duration.ofSeconds(4));
+        }
+        String url = endpoint.baseUrl();
+        if (url == null || url.isBlank() || isUnresolvedPlaceholder(url)) {
+            return new Endpoint(defaultUrl, endpoint.connectTimeout(), endpoint.responseTimeout());
         }
         return endpoint;
+    }
+
+    public static boolean isUnresolvedPlaceholder(String value) {
+        if (value == null) {
+            return true;
+        }
+        String trimmed = value.trim();
+        return trimmed.contains("${") || (trimmed.startsWith("{") && trimmed.endsWith("}")) || trimmed.contains("{MS_");
     }
 
     public record Endpoint(
@@ -29,9 +41,7 @@ public record ServiceProperties(
             Duration responseTimeout
     ) {
         public Endpoint {
-            if (baseUrl == null || baseUrl.isBlank()) {
-                throw new IllegalArgumentException("La URL del microservicio es obligatoria");
-            }
+            baseUrl = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
             connectTimeout = connectTimeout == null ? Duration.ofSeconds(2) : connectTimeout;
             responseTimeout = responseTimeout == null ? Duration.ofSeconds(4) : responseTimeout;
             if (connectTimeout.isNegative() || connectTimeout.isZero()) {

@@ -99,6 +99,35 @@ class InventoryClientTest {
     }
 
     @Test
+    void listProductsBuildsUriCorrectlyWithFilters() {
+        server.expect(requestTo("http://inventory.test/api/inventario/productos?categoria=Semillas&nombre=Trigo&activo=true"))
+                .andRespond(withSuccess("""
+                        [
+                          {
+                            "id": 1,
+                            "sku": "SEM-001",
+                            "nombre": "Semilla Trigo",
+                            "descripcion": null,
+                            "categoria": "Semillas",
+                            "precioVenta": 500.00,
+                            "stockActual": 100,
+                            "stockMinimo": 10,
+                            "stockBajo": false,
+                            "activo": true,
+                            "createdAt": "2026-08-28T12:00:00Z",
+                            "updatedAt": "2026-08-28T12:00:00Z"
+                          }
+                        ]
+                        """, MediaType.APPLICATION_JSON));
+
+        List<ProductResponse> products = client.listProducts("Semillas", "Trigo", true);
+
+        assertThat(products).hasSize(1);
+        assertThat(products.get(0).sku()).isEqualTo("SEM-001");
+        server.verify();
+    }
+
+    @Test
     void mapsDownstreamServerErrorToBadGateway() {
         server.expect(requestTo("http://inventory.test/api/inventario/productos/7"))
                 .andRespond(withServerError());
@@ -109,5 +138,22 @@ class InventoryClientTest {
                     assertThat(exception.getCode()).isEqualTo("BAD_GATEWAY");
                 });
         server.verify();
+    }
+
+    @Test
+    void servicePropertiesSanitizesUnresolvedEnvironmentPlaceholders() {
+        com.agrocenter.bff.config.ServiceProperties.Endpoint unexpanded =
+                new com.agrocenter.bff.config.ServiceProperties.Endpoint(
+                        "${MS_INVENTARIO_URL}",
+                        null,
+                        null
+                );
+
+        com.agrocenter.bff.config.ServiceProperties props =
+                new com.agrocenter.bff.config.ServiceProperties(unexpanded, null, null);
+
+        assertThat(props.inventory().baseUrl()).isEqualTo("http://ms-inventario-svc:8081");
+        assertThat(props.sales().baseUrl()).isEqualTo("http://ms-ventas-svc:8082");
+        assertThat(props.purchases().baseUrl()).isEqualTo("http://ms-compras-svc:8083");
     }
 }

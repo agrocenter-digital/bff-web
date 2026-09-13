@@ -10,11 +10,11 @@ agrocenter:
 
 services:
   inventory:
-    base-url: ${MS_INVENTARIO_URL}
+    base-url: ${INVENTORY_SERVICE_URL:${MS_INVENTARIO_URL:http://ms-inventario-svc:8081}}
   sales:
-    base-url: ${MS_VENTAS_URL}
+    base-url: ${SALES_SERVICE_URL:${MS_VENTAS_URL:http://ms-ventas-svc:8082}}
   purchases:
-    base-url: ${MS_COMPRAS_URL}
+    base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://ms-compras-svc:8083}}
 
 springdoc:
   api-docs:

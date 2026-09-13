@@ -26,15 +26,15 @@ agrocenter:
 
 services:
   inventory:
-    base-url: ${MS_INVENTARIO_URL:http://localhost:8081}
+    base-url: ${INVENTORY_SERVICE_URL:${MS_INVENTARIO_URL:http://localhost:8081}}
     connect-timeout: ${MS_INVENTARIO_CONNECT_TIMEOUT:2s}
     response-timeout: ${MS_INVENTARIO_RESPONSE_TIMEOUT:4s}
   sales:
-    base-url: ${MS_VENTAS_URL:http://localhost:8082}
+    base-url: ${SALES_SERVICE_URL:${MS_VENTAS_URL:http://localhost:8082}}
     connect-timeout: ${MS_VENTAS_CONNECT_TIMEOUT:2s}
     response-timeout: ${MS_VENTAS_RESPONSE_TIMEOUT:6s}
   purchases:
-    base-url: ${MS_COMPRAS_URL:http://localhost:8083}
+    base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://localhost:8083}}
     connect-timeout: ${MS_COMPRAS_CONNECT_TIMEOUT:2s}
     response-timeout: ${MS_COMPRAS_RESPONSE_TIMEOUT:4s}
 
