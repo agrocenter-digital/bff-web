@@ -1,325 +1,184 @@
-# AgroCenter Digital - bff-web
+# AgroCenter Digital - Arquitectura Global & Backend For Frontend (`bff-web`)
 
-`bff-web` es la capa Backend For Frontend específica para la SPA React. Es el
-único componente que el frontend debe consumir: valida identidad y permisos,
-oculta las URLs privadas, propaga el contexto autenticado y compone respuestas de
-los microservicios sin acceder a sus bases de datos ni duplicar lógica de negocio.
+Bienvenido a la documentación principal de **AgroCenter Digital**. Este repositorio alberga el componente **`bff-web` (Backend For Frontend)** y sirve como **guía de arquitectura macro** para todo el ecosistema de la plataforma (Frontend en Vercel, balanceador y microservicios en AWS ECS Fargate, autenticación en AWS Cognito y canalizaciones CI/CD automatizadas).
 
-## Arquitectura
+---
+
+## 1. Visión General del Sistema y Flujo Extremo a Extremo
+
+AgroCenter Digital está diseñado bajo una arquitectura desacoplada y nativa de la nube:
 
 ```mermaid
-flowchart LR
-    U[Usuario] --> R[React SPA]
-    R -->|Authorization Code + PKCE| C[AWS Cognito]
-    C -->|Access token JWT| R
-    R -->|Bearer JWT| G[AWS API Gateway]
-    G -->|JWT validado| B[bff-web]
-    B -->|Bearer JWT + X-Correlation-ID| I[ms-inventario]
-    B -->|Bearer JWT + X-Correlation-ID| V[ms-ventas]
-    B -->|Bearer JWT + X-Correlation-ID| P[ms-compras]
-    I --> B
-    V --> B
-    B -->|JSON para la SPA| R
+flowchart TD
+    subgraph Clientes["Capa Cliente & CDN"]
+        User["Usuario / Navegador"]
+        Vercel["Frontend Next.js (Vercel)\nhttps://front-web-seven.vercel.app"]
+        Cognito["AWS Cognito User Pool\n+ Google Identity Federation"]
+    end
+
+    subgraph Perimetro["Perímetro AWS & Balanceo"]
+        APIGW["AWS API Gateway / ALB Público"]
+        InternalALB["Router ALB Interno (Puerto 8080)\ninternal-agrocenter-bff-alb"]
+    end
+
+    subgraph ClusterECS["AWS ECS Fargate Cluster"]
+        BFF["agrocenter-bff (BFF Web)\nTarget Group: agrocenter-bff-tg (/*)"]
+        MS_INV["agrocenter-ms-inventario (Puerto 8081)\nTarget Group: tg-ms-inventario (/api/inventario/*)"]
+        MS_VEN["agrocenter-ms-ventas (Puerto 8082)\nTarget Group: tg-ms-ventas (/api/ventas/*)"]
+        MS_COM["agrocenter-ms-compras (Puerto 8083)\nTarget Group: tg-ms-compras (/api/compras/*)"]
+    end
+
+    subgraph BasesDatos["Capa de Persistencia (Amazon RDS / PostgreSQL)"]
+        DB_INV[("db_inventario")]
+        DB_VEN[("db_ventas")]
+        DB_COM[("db_compras")]
+    end
+
+    %% Relaciones
+    User -->|Navega / Consulta| Vercel
+    User -->|Login OAuth2 / PKCE| Cognito
+    Cognito -->|Access Token JWT| User
+    Vercel -->|Bearer JWT + Headers| APIGW
+    APIGW --> InternalALB
+
+    %% Enrutamiento del ALB
+    InternalALB -->|Ruta por defecto /*| BFF
+    InternalALB -->|Path /api/inventario/*| MS_INV
+    InternalALB -->|Path /api/ventas/*| MS_VEN
+    InternalALB -->|Path /api/compras/*| MS_COM
+
+    %% Comunicación BFF hacia microservicios
+    BFF -.->|Llamadas HTTP internas vía ALB| InternalALB
+
+    %% Persistencia Database-per-Service
+    MS_INV --> DB_INV
+    MS_VEN --> DB_VEN
+    MS_COM --> DB_COM
 ```
 
-El flujo obligatorio es `React -> API Gateway -> bff-web -> microservicios`.
-`ms-inventario` y `ms-ventas` deben permanecer en red privada y no configurar CORS
-para navegadores.
+### Recorrido de una Petición
+1. **Frontend (Vercel)**: La SPA React / Next.js alojada en Vercel (`https://front-web-seven.vercel.app/`) obtiene la sesión del usuario contra **AWS Cognito** (soportando usuarios directos y federados mediante Google).
+2. **Invocación Segura**: Las peticiones salen con el encabezado HTTP `Authorization: Bearer <accessToken>` hacia el punto de entrada de la API.
+3. **CORS & Perímetro**: El BFF valida la solicitud contra la lista blanca de orígenes de Vercel y entornos locales.
+4. **Enrutamiento Interno (AWS Academy Learner Lab)**:
+   - Ante las restricciones de IAM en el entorno educativo (sin permisos para Route 53 privado o Service Connect / Cloud Map), se implementó un **Application Load Balancer interno (`internal-agrocenter-bff-alb`)** escuchando en el puerto `8080`.
+   - Utiliza **Path-Based Routing** para direccionar el tráfico a los Target Groups correspondientes:
+     * `/api/inventario/*` $\rightarrow$ Target Group `tg-ms-inventario` (puerto 8081).
+     * `/api/ventas/*` $\rightarrow$ Target Group `tg-ms-ventas` (puerto 8082).
+     * `/api/compras/*` $\rightarrow$ Target Group `tg-ms-compras` (puerto 8083).
+     * Regla por defecto (`/*`) $\rightarrow$ Target Group `agrocenter-bff-tg` (puerto 8080).
+5. **Aislamiento de Datos (Database-per-Service)**: Cada microservicio corre en tareas dedicadas de AWS ECS Fargate y solo se conecta a su base de datos PostgreSQL asignada.
 
-## Defense in Depth y Cognito
+---
 
-API Gateway realiza la validación perimetral. El BFF vuelve a validar cada Bearer
-token como OAuth2 Resource Server de Spring Security, de modo que un acceso directo
-o una configuración incorrecta del gateway no omita los controles internos.
+## 2. CI/CD, Workflows y Despliegue Automatizado
 
-En los perfiles normales y `prod`, el decoder del BFF:
+El despliegue continuo opera mediante la integración de **GitHub Actions**, **Docker Hub**, **Vercel** y **AWS ECS**:
 
-- admite exclusivamente firmas `RS256`;
-- obtiene y rota las claves públicas desde `COGNITO_JWK_SET_URI` (JWKS);
-- valida firma criptográfica, formato y token manipulado;
-- valida `iss` contra `COGNITO_ISSUER_URI`;
-- valida `exp` y `nbf` mediante los validadores estándar de Spring Security;
-- exige `token_use=access`, evitando usar un ID token como credencial de API;
-- valida `COGNITO_AUDIENCE` contra `aud` o contra el claim `client_id` de los
-  access tokens de Cognito.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Desarrollador
+    participant GH as GitHub Repository (main)
+    participant GHA as GitHub Actions Workflow
+    participant DH as Docker Hub Registry
+    participant WH as Webhook / ECS Deployer
+    participant ECS as AWS ECS Fargate Cluster
+    participant Vercel as Vercel Platform
 
-Los grupos de `cognito:groups` y el claim opcional `custom:role` se convierten a
-`ROLE_CLIENTE` y `ROLE_ADMIN`. Solo esos dos nombres se aceptan como roles; los
-scopes OAuth se conservan como authorities `SCOPE_*`.
+    rect rgb(240, 248, 255)
+    Note over Dev,Vercel: Despliegue de Microservicios Backend
+    Dev->>GH: git push origin main
+    GH->>GHA: Dispara `.github/workflows/deploy.yml`
+    GHA->>GHA: Multi-stage Docker Build (Java 21 / Spring Boot)
+    GHA->>DH: Push de imagen (`:latest`) con secretos DOCKERHUB_*
+    DH-->>WH: Notificación / Webhook de nueva imagen
+    WH->>ECS: `aws ecs update-service --force-new-deployment`
+    ECS->>ECS: Inicia nueva Fargate Task, espera Target Group Healthy y drena tarea anterior
+    end
 
-El perfil `dev` es una excepción local explícita y nunca debe combinarse con
-`prod`: valida HS256 con `DEV_JWT_SECRET`, issuer y audience. Esto permite reutilizar
-el token local emitido por `ms-inventario` cuando ambos procesos comparten secret,
-issuer y audience. No existe un emisor de tokens dentro del BFF.
-
-## Endpoints públicos del BFF
-
-Todos los endpoints bajo `/api/bff` requieren un JWT válido.
-
-| Método | Ruta BFF | Rol | Destino real |
-|---|---|---|---|
-| `GET` | `/api/bff/catalogo` | CLIENTE, ADMIN | `GET /api/inventario/productos?activo=true` |
-| `GET` | `/api/bff/productos/{id}` | CLIENTE, ADMIN | `GET /api/inventario/productos/{id}` |
-| `GET` | `/api/bff/productos/sku/{sku}` | CLIENTE, ADMIN | `GET /api/inventario/productos/sku/{sku}` |
-| `GET` | `/api/bff/productos/{id}/stock` | CLIENTE, ADMIN | `GET /api/inventario/productos/{id}/stock` |
-| `GET` | `/api/bff/inventario` | ADMIN | `GET /api/inventario/productos` |
-| `GET` | `/api/bff/inventario/stock-bajo` | ADMIN | Filtra `stockBajo` del contrato de productos |
-| `POST` | `/api/bff/inventario/productos` | ADMIN | `POST /api/inventario/productos` |
-| `PUT` | `/api/bff/inventario/productos/{id}` | ADMIN | `PUT /api/inventario/productos/{id}` |
-| `PATCH` | `/api/bff/inventario/productos/{id}/estado` | ADMIN | `PATCH /api/inventario/productos/{id}/estado` |
-| `GET` | `/api/bff/inventario/movimientos` | ADMIN | `GET /api/inventario/movimientos` |
-| `GET` | `/api/bff/inventario/productos/{id}/movimientos` | ADMIN | `GET /api/inventario/productos/{id}/movimientos` |
-| `POST` | `/api/bff/ventas` | CLIENTE | `POST /api/v1/ventas` |
-| `GET` | `/api/bff/ventas/mis-pedidos` | CLIENTE | `GET /api/v1/ventas/mis-pedidos` |
-| `GET` | `/api/bff/ventas/{id}` | CLIENTE propietario, ADMIN | `GET /api/v1/ventas/{id}` |
-| `GET` | `/api/bff/admin/ventas` | ADMIN | `GET /api/v1/ventas` |
-| `POST` | `/api/bff/compras` | ADMIN | `POST /api/compras` |
-| `GET` | `/api/bff/compras` | ADMIN | `GET /api/compras` |
-| `GET` | `/api/bff/compras/{id}` | ADMIN | `GET /api/compras/{id}` |
-| `GET` | `/api/bff/admin/dashboard` | ADMIN | Agrega inventario + ventas + compras |
-| `GET` | `/actuator/health` | Público en la red | Salud básica, sin detalles |
-
-Los listados paginados aceptan `pagina` desde `0` y `tamanio` entre `1` y `100`.
-El catálogo acepta `categoria` y `nombre`. El inventario administrativo también
-acepta `activo`.
-
-## Agregación del dashboard
-
-`GET /api/bff/admin/dashboard` consulta contratos reales:
-
-1. `ms-inventario` para la lista total y los productos cuyo propio campo
-   `stockBajo` es `true`.
-2. `ms-ventas` con una página mínima para obtener `totalElementos`.
-3. `ms-compras` para contabilizar las órdenes devueltas por su listado real.
-
-Ejemplo:
-
-```json
-{
-  "generadoEn": "2026-08-28T20:00:00Z",
-  "inventario": {
-    "productos": 120,
-    "productosStockBajo": 8
-  },
-  "ventas": {
-    "ventasRegistradas": 54
-  },
-  "compras": {
-    "comprasRegistradas": 4
-  }
-}
+    rect rgb(255, 250, 240)
+    Note over Dev,Vercel: Despliegue del Frontend
+    Dev->>GH: git push origin main (front-web)
+    GH->>Vercel: Webhook automático de Vercel Git Integration
+    Vercel->>Vercel: Optimización y despliegue Next.js a CDN global
+    end
 ```
 
-No se calcula `ventasHoy`, `totalHoy` ni un período de compras recientes porque los servicios
-actuales no ofrecen consultas agregadas o filtradas capaces de producir esos datos
-de manera completa y eficiente.
+### Componentes de Despliegue:
+* **GitHub Actions (`.github/workflows/deploy.yml`)**: Presente en cada repositorio (`bff-web`, `front-web`, `ms-inventario`, `ms-ventas`, `ms-compras`), autentica contra Docker Hub y genera imágenes optimizadas en multi-stage sin incluir herramientas de desarrollo ni código fuente.
+* **Vercel Git Integration**: Monitorea la rama `main` del frontend y despliega automáticamente a producción sin downtime.
+* **AWS ECS Fargate**: Servicios configurados con *Rolling Update* para garantizar cero caídas (Zero-Downtime Deployment) mediante los health checks de cada Target Group (`/actuator/health`).
 
-## Comunicación interna
+---
 
-`InventoryClient`, `SalesClient` y `PurchasesClient` concentran las llamadas con `RestClient`. Un
-interceptor central extrae el JWT que Spring Security ya autenticó y lo propaga
-como Bearer; nunca usa un token global, inventado o registrado en logs. El mismo
-interceptor propaga `X-Correlation-ID`. `SalesClient` también envía
-`Idempotency-Key`, conserva `Idempotent-Replay` y el BFF genera su propio header
-`Location`, sin filtrar URLs internas.
+## 3. Rol Específico del `bff-web`
 
-El JWT también se propaga a `ms-compras`, aunque su implementación actual no tiene
-Spring Security ni OAuth2 Resource Server y por tanto todavía no lo valida. El BFF
-sí restringe todas las rutas de compras a `ADMIN`; la defensa en profundidad de ese
-flujo quedará completa cuando se endurezca el microservicio interno.
+El BFF es la fachada especializada para la interfaz web. Sus responsabilidades son:
+* **Abstracción de Microservicios**: Los navegadores nunca interactúan directamente con los puertos ni las URLs privadas de los microservicios (`ms-inventario:8081`, `ms-ventas:8082`, `ms-compras:8083`).
+* **Composición y Agregación**: Construye vistas compuestas como el catálogo general (`GET /api/bff/catalogo`) y el panel de administración (`GET /api/bff/admin/dashboard`), evitando el problema de sobrecarga de peticiones (*chatty frontend*).
+* **Defensa en Profundidad (Resource Server)**: Valida la criptografía del JWT antes de transmitir la solicitud a la red interna.
+* **Resiliencia & Sanitización de URLs**: Maneja timeouts por microservicio, fallbacks de DNS y sanitización de plantillas URI (prevención de errores `IllegalArgumentException` por placeholders no resueltos).
 
-Cada servicio tiene connection/response timeout independiente. Un timeout o fallo
-de transporte devuelve `503`; un `5xx` mal formado devuelve `502`. Los `400`, `404`
-y `409` controlados se traducen al mismo código. Si un microservicio rechaza el JWT
-que el BFF ya validó, se devuelve `502` porque indica una incompatibilidad interna
-de seguridad y no una sesión inválida del usuario.
+---
 
-## Errores
+## 4. Endpoints Expuestos por el BFF
 
-Las respuestas no incluyen stack traces ni secretos:
+Todos los endpoints se exponen bajo el prefijo `/api/bff`:
 
-```json
-{
-  "timestamp": "2026-08-28T20:00:00Z",
-  "status": 403,
-  "error": "FORBIDDEN",
-  "code": "FORBIDDEN",
-  "message": "No tiene permisos para realizar esta operacion",
-  "path": "/api/bff/inventario",
-  "correlationId": "2415340f-bfe2-4f96-b8d4-7410db8ee384",
-  "validationErrors": {}
-}
+| Método | Ruta | Autorización | Descripción / Destino |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/bff/catalogo` | **Público** / Anónimo / Autenticado | Catálogo de productos disponibles (`GET /api/inventario/productos?activo=true`) |
+| `GET` | `/api/bff/productos/{id}` | **Público** / Anónimo / Autenticado | Detalle de producto (`GET /api/inventario/productos/{id}`) |
+| `GET` | `/api/bff/productos/sku/{sku}` | **Público** / Anónimo / Autenticado | Detalle por SKU (`GET /api/inventario/productos/sku/{sku}`) |
+| `GET` | `/api/bff/productos/{id}/stock`| **Público** / Anónimo / Autenticado | Existencias de producto (`GET /api/inventario/productos/{id}/stock`) |
+| `GET` | `/api/bff/inventario` | `ROLE_ADMIN` | Gestión administrativa completa de inventario |
+| `GET` | `/api/bff/inventario/stock-bajo` | `ROLE_ADMIN` | Listado filtrado de productos con stock crítico |
+| `POST` | `/api/bff/inventario/productos` | `ROLE_ADMIN` | Creación de productos en inventario |
+| `PUT` | `/api/bff/inventario/productos/{id}` | `ROLE_ADMIN` | Actualización de productos |
+| `PATCH` | `/api/bff/inventario/productos/{id}/estado` | `ROLE_ADMIN` | Activación o desactivación |
+| `GET` | `/api/bff/inventario/movimientos` | `ROLE_ADMIN` | Historial auditable de movimientos de stock |
+| `POST` | `/api/bff/ventas` | `ROLE_CLIENTE` | Registro de pedido/venta (`POST /api/v1/ventas`) |
+| `GET` | `/api/bff/ventas/mis-pedidos` | `ROLE_CLIENTE` | Historial de pedidos del cliente autenticado |
+| `GET` | `/api/bff/ventas/{id}` | Propietario o `ROLE_ADMIN` | Detalle de orden de venta |
+| `GET` | `/api/bff/admin/ventas` | `ROLE_ADMIN` | Reporte global de ventas |
+| `POST` | `/api/bff/compras` | `ROLE_ADMIN` | Registro de orden de compra a proveedores |
+| `GET` | `/api/bff/compras` | `ROLE_ADMIN` | Consulta general de compras |
+| `GET` | `/api/bff/compras/{id}` | `ROLE_ADMIN` | Consulta de orden de compra por ID |
+| `GET` | `/api/bff/admin/dashboard` | `ROLE_ADMIN` | Agregación consolidada (Inventario + Ventas + Compras) |
+| `GET` | `/actuator/health` | **Público** | Health check básico de Fargate y ALB |
+
+---
+
+## 5. Matriz de Configuración y Variables de Entorno
+
+| Variable | Obligatoria en Prod | Descripción | Valor / Ejemplo |
+| :--- | :---: | :--- | :--- |
+| `SERVER_PORT` | No | Puerto HTTP del BFF | `8080` |
+| `SPRING_PROFILES_ACTIVE` | **Sí** | Perfil Spring activo | `prod` (o `dev` en local) |
+| `COGNITO_ISSUER_URI` | **Sí** | Issuer del User Pool en AWS | `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCbjL67J` |
+| `COGNITO_JWK_SET_URI` | **Sí** | Endpoint público JWKS de Cognito | `${COGNITO_ISSUER_URI}/.well-known/jwks.json` |
+| `COGNITO_AUDIENCE` | **Sí** | App Client ID aceptado | `tu_cognito_app_client_id` |
+| `ALLOWED_ORIGINS` | **Sí** | Lista blanca CORS para frontend | `https://front-web-seven.vercel.app,http://localhost:3000` |
+| `MS_INVENTARIO_URL` | **Sí** | URL base de inventario (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
+| `MS_VENTAS_URL` | **Sí** | URL base de ventas (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
+| `MS_COMPRAS_URL` | **Sí** | URL base de compras (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
+| `MS_INVENTARIO_CONNECT_TIMEOUT` | No | Timeout de conexión HTTP | `2s` |
+| `MS_INVENTARIO_RESPONSE_TIMEOUT` | No | Timeout de lectura HTTP | `5s` |
+
+---
+
+## 6. Ejecución Local y Desarrollo
+
+### Pruebas Automatizadas
+Para ejecutar toda la suite de pruebas unitarias y de integración de seguridad del BFF:
+```bash
+./mvnw clean test
 ```
 
-- Sin token, token falso o token expirado: `401 Unauthorized`.
-- JWT válido sin el rol necesario: `403 Forbidden`.
-- Request o DTO inválido: `400 Bad Request`.
-- Recurso inexistente: `404 Not Found`.
-- Conflicto o stock insuficiente: `409 Conflict`.
-- Respuesta inválida de un servicio: `502 Bad Gateway`.
-- Timeout o servicio no disponible: `503 Service Unavailable`.
-
-## Variables de entorno
-
-| Variable | Obligatoria en prod | Uso |
-|---|---:|---|
-| `SERVER_PORT` | No | Puerto del BFF, por defecto `8080` |
-| `COGNITO_ISSUER_URI` | Sí | Issuer exacto del User Pool |
-| `COGNITO_JWK_SET_URI` | Sí | Endpoint JWKS del User Pool |
-| `COGNITO_AUDIENCE` | Sí | App Client ID/audience aceptada |
-| `MS_INVENTARIO_URL` | Sí | URL privada de `ms-inventario` |
-| `MS_VENTAS_URL` | Sí | URL privada de `ms-ventas` |
-| `MS_COMPRAS_URL` | Sí | URL privada de `ms-compras` |
-| `MS_INVENTARIO_CONNECT_TIMEOUT` | No | Connection timeout; `2s` local |
-| `MS_INVENTARIO_RESPONSE_TIMEOUT` | No | Response timeout; `4s` local |
-| `MS_VENTAS_CONNECT_TIMEOUT` | No | Connection timeout; `2s` local |
-| `MS_VENTAS_RESPONSE_TIMEOUT` | No | Response timeout; `6s` local |
-| `MS_COMPRAS_CONNECT_TIMEOUT` | No | Configuración preparada |
-| `MS_COMPRAS_RESPONSE_TIMEOUT` | No | Configuración preparada |
-| `ALLOWED_ORIGINS` | Sí | Lista separada por comas, sin `*` |
-| `SWAGGER_ENABLED` | No | OpenAPI solo para desarrollo |
-| `SPRING_PROFILES_ACTIVE` | Sí | `prod` en AWS |
-| `DEV_JWT_SECRET` | Solo dev | Secret local de al menos 32 caracteres |
-| `DEV_JWT_ISSUER` | Solo dev | Issuer local compartido |
-
-`.env.example` contiene solo valores ficticios. `.env`, tokens, claves, logs,
-artefactos Maven e IDEs están excluidos de Git y Docker.
-
-## Ejecución local
-
-Requisitos: Java 21, Maven 3.9+ y los servicios de inventario/ventas activos.
-
-Con Cognito real:
-
-```powershell
-$env:COGNITO_ISSUER_URI='https://cognito-idp.us-east-1.amazonaws.com/us-east-1_POOL'
-$env:COGNITO_JWK_SET_URI="$env:COGNITO_ISSUER_URI/.well-known/jwks.json"
-$env:COGNITO_AUDIENCE='APP_CLIENT_ID'
-$env:MS_INVENTARIO_URL='http://localhost:8081'
-$env:MS_VENTAS_URL='http://localhost:8082'
-$env:ALLOWED_ORIGINS='http://localhost:3000,http://localhost:5173'
-./mvnw.cmd spring-boot:run
-```
-
-Para usar los JWT locales que emite `ms-inventario` bajo perfil `dev`:
-
-```powershell
-$env:SPRING_PROFILES_ACTIVE='dev'
-$env:DEV_JWT_SECRET='una-clave-local-compartida-de-al-menos-32-caracteres'
-$env:DEV_JWT_ISSUER='http://localhost:8081/dev-issuer'
-$env:COGNITO_AUDIENCE='agrocenter-api'
-./mvnw.cmd spring-boot:run
-```
-
-Los tres procesos deben compartir `DEV_JWT_SECRET`, `DEV_JWT_ISSUER` y audience.
-El endpoint emisor continúa siendo `POST http://localhost:8081/api/dev/token`;
-el BFF no genera credenciales.
-
-Ejemplos:
-
-```http
-GET http://localhost:8080/api/bff/catalogo
-Authorization: Bearer <access-token>
-X-Correlation-ID: demo-catalogo-001
-```
-
-```http
-POST http://localhost:8080/api/bff/ventas
-Authorization: Bearer <access-token-cliente>
-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
-Content-Type: application/json
-
-{
-  "items": [
-    {"productoId": 10, "cantidad": 2}
-  ]
-}
-```
-
-## Pruebas y compilación
-
-Las pruebas no requieren AWS, PostgreSQL ni microservicios reales. Usan Spring
-Security Test, MockMvc, Mockito y el servidor HTTP simulado de Spring.
-
-```powershell
-./mvnw.cmd test
-./mvnw.cmd package
-```
-
-La suite cubre:
-
-- `401` sin token, token falso y token expirado;
-- `403` para CLIENTE sobre rutas ADMIN;
-- acceso permitido para ADMIN y CLIENTE;
-- conversión segura de grupos/scopes y validadores de audience/token use;
-- validación de DTOs antes de llamar a los servicios;
-- respuesta real deserializada de `InventoryClient`;
-- propagación del Bearer validado y correlation ID;
-- traducción de fallos de microservicios a `502`/`503`;
-- agregación del dashboard.
-- autorización y creación de compras para ADMIN.
-
-## Docker
-
-```powershell
-Copy-Item .env.example .env
-# Editar .env y reemplazar los valores ficticios.
+### Ejecución con Perfil Local / Docker
+```bash
+cp .env.example .env
 docker compose up --build -d
-docker compose ps
-curl.exe http://localhost:8080/actuator/health
+curl http://localhost:8080/actuator/health
 ```
-
-O construir y ejecutar directamente con Cognito:
-
-```powershell
-docker build -t agrocenter/bff-web:local .
-docker run --rm -p 8080:8080 `
-  -e SPRING_PROFILES_ACTIVE=prod `
-  -e COGNITO_ISSUER_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_POOL `
-  -e COGNITO_JWK_SET_URI=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_POOL/.well-known/jwks.json `
-  -e COGNITO_AUDIENCE=APP_CLIENT_ID `
-  -e MS_INVENTARIO_URL=http://host.docker.internal:8081 `
-  -e MS_VENTAS_URL=http://host.docker.internal:8082 `
-  -e MS_COMPRAS_URL=http://host.docker.internal:8083 `
-  -e ALLOWED_ORIGINS=http://localhost:3000 `
-  agrocenter/bff-web:local
-```
-
-La imagen usa Java 21, multi-stage build, usuario no root, health check y admite
-filesystem de solo lectura en Compose.
-
-## Pendientes de AWS e integración
-
-- crear/configurar el User Pool, App Client público sin secret y callback/logout
-  URLs para Authorization Code + PKCE;
-- configurar los grupos `CLIENTE` y `ADMIN` y asignarlos a usuarios;
-- configurar el JWT Authorizer de API Gateway con el mismo issuer/audience;
-- enrutar exclusivamente API Gateway hacia el BFF y mantener los tres servicios
-  en subredes privadas/security groups restringidos;
-- inyectar configuración desde el entorno/Parameter Store/Secrets Manager, nunca
-  desde la imagen;
-- configurar CORS en API Gateway y conservar en el BFF solo los orígenes exactos;
-- publicar health checks internos y centralizar logs/métricas en CloudWatch;
-- corregir y endurecer `ms-compras`: Resource Server Cognito, errores JSON,
-  configuración empaquetada, timeouts y contrato correcto con inventario;
-- ejecutar pruebas end-to-end con Cognito, API Gateway y los servicios desplegados.
-
-## Limitaciones detectadas en el repositorio
-
-- El repositorio raíz no tenía `bff-web` ni `.gitignore`; ambos fueron agregados.
-- `ms-inventario` declara Spring Boot `4.1.0`, mientras `ms-ventas` usa `3.5.7`.
-  El BFF usa `3.5.7` para conservar compatibilidad con el servicio de ventas y
-  APIs estables de Java 21; conviene alinear versiones en una tarea separada.
-- El frontend ya apunta a una única `NEXT_PUBLIC_API_BASE_URL`, pero sus pantallas
-  actuales todavía no contienen llamadas concretas a estos endpoints del BFF.
-- El contrato de ventas no ofrece filtro/resumen diario; el dashboard solo puede
-  informar el total global sin recorrer toda la historia.
-- `ms-compras` apareció durante la implementación y se integraron sus rutas reales
-  `/api/compras`. Sin embargo, hoy no valida JWT, su `application.yml` está en
-  `src/resources` en vez de `src/main/resources`, y su `pom.xml` solo incluye H2
-  mientras ese YAML configura PostgreSQL.
-- `ms-compras` intenta registrar inventario en `POST /api/inventario/movimientos`,
-  ruta que no existe en `ms-inventario` (el contrato real de entrada es
-  `POST /api/inventario/stock/entrada`), y además absorbe el error. Una compra puede
-  responder `COMPLETADA` sin que aumente el stock; esto debe corregirse en ese
-  microservicio, no en el BFF.
