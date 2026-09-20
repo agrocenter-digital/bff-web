@@ -1,9 +1,17 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J}
+          jwk-set-uri: ${COGNITO_JWK_SET_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J/.well-known/jwks.json}
+
 agrocenter:
   security:
     jwt:
-      issuer-uri: ${COGNITO_ISSUER_URI}
-      jwk-set-uri: ${COGNITO_JWK_SET_URI}
-      audience: ${COGNITO_AUDIENCE}
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J}
+      jwk-set-uri: ${COGNITO_JWK_SET_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J/.well-known/jwks.json}
+      audience: ${COGNITO_AUDIENCE:agrocenter-api}
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:https://front-web-seven.vercel.app,http://localhost:3000,http://localhost:5173}
     allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:https://*.vercel.app}

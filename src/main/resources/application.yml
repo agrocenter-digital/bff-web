@@ -9,12 +9,18 @@ spring:
     name: bff-web
   jackson:
     time-zone: UTC
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J}
+          jwk-set-uri: ${COGNITO_JWK_SET_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J/.well-known/jwks.json}
 
 agrocenter:
   security:
     jwt:
-      issuer-uri: ${COGNITO_ISSUER_URI:http://localhost:9999/mock-cognito}
-      jwk-set-uri: ${COGNITO_JWK_SET_URI:http://localhost:9999/mock-cognito/.well-known/jwks.json}
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J}
+      jwk-set-uri: ${COGNITO_JWK_SET_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J/.well-known/jwks.json}
       audience: ${COGNITO_AUDIENCE:agrocenter-api}
     dev:
       jwt-secret: ${DEV_JWT_SECRET:}
