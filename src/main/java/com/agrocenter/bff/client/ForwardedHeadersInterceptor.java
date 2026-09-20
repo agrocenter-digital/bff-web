@@ -40,20 +40,38 @@ public class ForwardedHeadersInterceptor implements ClientHttpRequestInterceptor
 
         // Para el catálogo público no se exige ni propaga token downstream, permitiendo
         // acceso anónimo limpio sin que el microservicio falle por credenciales inválidas.
-        // En rutas privadas, se propaga el Bearer token únicamente si el usuario está autenticado.
+        // En rutas privadas, se propaga el Bearer token recibido desde el frontend o contexto.
         if (!isPublicCatalogRequest) {
+            String token = null;
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null
                     && authentication.isAuthenticated()
                     && !(authentication instanceof AnonymousAuthenticationToken)) {
 
                 if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
-                    request.getHeaders().setBearerAuth(jwtAuthentication.getToken().getTokenValue());
+                    token = jwtAuthentication.getToken().getTokenValue();
                 } else if (authentication.getPrincipal() instanceof Jwt jwt) {
-                    request.getHeaders().setBearerAuth(jwt.getTokenValue());
-                } else if (authentication.getCredentials() instanceof String cred && !cred.isBlank()) {
-                    request.getHeaders().setBearerAuth(cred);
+                    token = jwt.getTokenValue();
+                } else if (authentication.getCredentials() instanceof Jwt jwt) {
+                    token = jwt.getTokenValue();
+                } else if (authentication.getCredentials() != null) {
+                    String credStr = authentication.getCredentials().toString();
+                    if (!credStr.isBlank()) {
+                        token = credStr.startsWith("Bearer ") ? credStr.substring(7).trim() : credStr.trim();
+                    }
                 }
+            }
+
+            // Fallback: si aún no se obtuvo del contexto pero la petición HTTP entrante incluye Authorization
+            if ((token == null || token.isBlank()) && servletRequest != null) {
+                String authHeader = servletRequest.getHeader(HttpHeaders.AUTHORIZATION);
+                if (authHeader != null && !authHeader.isBlank()) {
+                    token = authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : authHeader.trim();
+                }
+            }
+
+            if (token != null && !token.isBlank()) {
+                request.getHeaders().setBearerAuth(token);
             }
         }
 
