@@ -29,10 +29,20 @@ public class ForwardedHeadersInterceptor implements ClientHttpRequestInterceptor
         if (authentication instanceof JwtAuthenticationToken jwtAuthentication
                 && authentication.isAuthenticated()) {
             request.getHeaders().setBearerAuth(jwtAuthentication.getToken().getTokenValue());
+        } else if (authentication != null && authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+            request.getHeaders().setBearerAuth(jwt.getTokenValue());
+        } else if (authentication != null && authentication.getCredentials() instanceof String cred && !cred.isBlank()) {
+            request.getHeaders().setBearerAuth(cred);
         }
 
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             HttpServletRequest servletRequest = attributes.getRequest();
+            if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                String authHeader = servletRequest.getHeader(HttpHeaders.AUTHORIZATION);
+                if (authHeader != null && !authHeader.isBlank()) {
+                    request.getHeaders().set(HttpHeaders.AUTHORIZATION, authHeader);
+                }
+            }
             request.getHeaders().set(
                     CorrelationIdFilter.HEADER_NAME,
                     CorrelationIdFilter.from(servletRequest)

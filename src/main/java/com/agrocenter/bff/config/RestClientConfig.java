@@ -105,6 +105,14 @@ public class RestClientConfig {
                 default -> "http://localhost:8080";
             };
         }
-        return url.trim().replaceAll("/+$", "");
+        String clean = url.trim().replaceAll("/+$", "");
+        if ("ms-inventario".equals(service)) {
+            clean = clean.replaceAll("/api/inventario/?$", "");
+        } else if ("ms-ventas".equals(service)) {
+            clean = clean.replaceAll("/api(/v1)?/ventas/?$", "");
+        } else if ("ms-compras".equals(service)) {
+            clean = clean.replaceAll("/api/compras/?$", "");
+        }
+        return clean.replaceAll("/+$", "");
     }
 }
