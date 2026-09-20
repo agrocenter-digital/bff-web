@@ -58,8 +58,17 @@ class BffSecurityIntegrationTest {
     private PurchasesClient purchasesClient;
 
     @Test
-    void protectedEndpointWithoutTokenReturns401() throws Exception {
+    void publicCatalogWithoutTokenReturns200() throws Exception {
+        given(inventoryClient.listProducts(null, null, true)).willReturn(List.of(product(1, false)));
+
         mockMvc.perform(get("/api/bff/catalogo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1));
+    }
+
+    @Test
+    void protectedEndpointWithoutTokenReturns401() throws Exception {
+        mockMvc.perform(get("/api/bff/inventario"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
@@ -70,7 +79,7 @@ class BffSecurityIntegrationTest {
     void fakeTokenReturns401() throws Exception {
         given(jwtDecoder.decode("fake-token")).willThrow(new BadJwtException("invalid signature"));
 
-        mockMvc.perform(get("/api/bff/catalogo")
+        mockMvc.perform(get("/api/bff/inventario")
                         .header("Authorization", "Bearer fake-token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
@@ -83,7 +92,7 @@ class BffSecurityIntegrationTest {
                 List.of(new OAuth2Error("invalid_token", "Jwt expired", null))
         ));
 
-        mockMvc.perform(get("/api/bff/catalogo")
+        mockMvc.perform(get("/api/bff/inventario")
                         .header("Authorization", "Bearer expired-token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401));

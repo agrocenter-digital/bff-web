@@ -38,15 +38,27 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .authorizeHttpRequests(auth -> auth
+                        // Sonda de salud de AWS ALB (debe ser pública para evitar bucles de reinicio en ECS)
                         .requestMatchers(
                                 "/actuator/health",
+                                "/actuator/info",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/error"
                         ).permitAll()
+
+                        // Catálogo público (solo lectura GET para clientes anónimos)
+                        .requestMatchers(HttpMethod.GET, "/api/bff/catalogo", "/api/bff/catalogo/**").permitAll()
+
+                        // Preflights de CORS para el navegador
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Rutas administrativas (exigen explícitamente ROLE_ADMIN)
+                        .requestMatchers("/api/bff/admin/**", "/api/bff/inventario/**", "/api/bff/compras/**").hasAuthority("ROLE_ADMIN")
+
+                        // Todo lo demás exige autenticación
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions

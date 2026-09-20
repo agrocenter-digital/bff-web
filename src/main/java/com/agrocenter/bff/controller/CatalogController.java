@@ -27,7 +27,6 @@ public class CatalogController {
     }
 
     @GetMapping("/catalogo")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public List<ProductResponse> catalog(
             @RequestParam(required = false) @Size(max = 80) String categoria,
             @RequestParam(required = false) @Size(max = 120) String nombre
