@@ -71,7 +71,7 @@ public class SalesController {
         return salesClient.get(id);
     }
 
-    @GetMapping("/admin/ventas")
+    @GetMapping({"/admin/ventas", "/ventas"})
     @PreAuthorize("hasRole('ADMIN')")
     public PageResponse<SaleResponse> all(
             @RequestParam(defaultValue = "0") @Min(0) int pagina,

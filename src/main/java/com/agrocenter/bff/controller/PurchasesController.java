@@ -21,7 +21,7 @@ import java.util.List;
 
 @Validated
 @RestController
-@RequestMapping("/api/bff/compras")
+@RequestMapping({"/api/bff/compras", "/api/bff/admin/compras"})
 @PreAuthorize("hasRole('ADMIN')")
 public class PurchasesController {
 
