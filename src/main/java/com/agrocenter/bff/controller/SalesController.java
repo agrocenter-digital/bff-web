@@ -28,7 +28,7 @@ import java.net.URI;
 
 @Validated
 @RestController
-@RequestMapping("/api/bff")
+@RequestMapping({"/api/bff", "/api"})
 public class SalesController {
 
     private final SalesClient salesClient;
