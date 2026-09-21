@@ -19,10 +19,16 @@ agrocenter:
 services:
   inventory:
     base-url: ${INVENTORY_SERVICE_URL:${MS_INVENTARIO_URL:http://internal-agrocenter-bff-alb:8080}}
+    connect-timeout: ${MS_INVENTARIO_CONNECT_TIMEOUT:5s}
+    response-timeout: ${MS_INVENTARIO_RESPONSE_TIMEOUT:10s}
   sales:
     base-url: ${SALES_SERVICE_URL:${MS_VENTAS_URL:http://internal-agrocenter-bff-alb:8080}}
+    connect-timeout: ${MS_VENTAS_CONNECT_TIMEOUT:5s}
+    response-timeout: ${MS_VENTAS_RESPONSE_TIMEOUT:20s}
   purchases:
     base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://internal-agrocenter-bff-alb:8080}}
+    connect-timeout: ${MS_COMPRAS_CONNECT_TIMEOUT:5s}
+    response-timeout: ${MS_COMPRAS_RESPONSE_TIMEOUT:20s}
 
 springdoc:
   api-docs:

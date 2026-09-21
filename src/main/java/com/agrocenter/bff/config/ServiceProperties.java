@@ -18,7 +18,7 @@ public record ServiceProperties(
 
     private static Endpoint sanitizeEndpoint(Endpoint endpoint, String name, String defaultUrl) {
         if (endpoint == null) {
-            return new Endpoint(defaultUrl, Duration.ofSeconds(2), Duration.ofSeconds(4));
+            return new Endpoint(defaultUrl, Duration.ofSeconds(5), Duration.ofSeconds(20));
         }
         String url = endpoint.baseUrl();
         if (url == null || url.isBlank() || isUnresolvedPlaceholder(url)) {
@@ -42,8 +42,8 @@ public record ServiceProperties(
     ) {
         public Endpoint {
             baseUrl = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
-            connectTimeout = connectTimeout == null ? Duration.ofSeconds(2) : connectTimeout;
-            responseTimeout = responseTimeout == null ? Duration.ofSeconds(4) : responseTimeout;
+            connectTimeout = connectTimeout == null ? Duration.ofSeconds(5) : connectTimeout;
+            responseTimeout = responseTimeout == null ? Duration.ofSeconds(20) : responseTimeout;
             if (connectTimeout.isNegative() || connectTimeout.isZero()) {
                 throw new IllegalArgumentException("El connection timeout debe ser positivo");
             }
