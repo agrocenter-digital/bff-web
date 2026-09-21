@@ -33,7 +33,7 @@ public class PurchasesClient {
     public PurchaseResponse create(CreatePurchaseRequest request) {
         ResponseEntity<PurchaseResponse> response = executor.execute("ms-compras", "crear compra", () ->
                 restClient.post()
-                        .uri("/api/compras/")
+                        .uri("/api/compras")
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
                         .retrieve()
@@ -48,7 +48,7 @@ public class PurchasesClient {
     public List<PurchaseResponse> list() {
         return executor.execute("ms-compras", "listar compras", () ->
                 restClient.get()
-                        .uri("/api/compras/")
+                        .uri("/api/compras")
                         .retrieve()
                         .body(PURCHASE_LIST_TYPE)
         );

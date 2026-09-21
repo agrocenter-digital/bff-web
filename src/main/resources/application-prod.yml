@@ -18,11 +18,11 @@ agrocenter:
 
 services:
   inventory:
-    base-url: ${INVENTORY_SERVICE_URL:${MS_INVENTARIO_URL:http://ms-inventario-svc:8081}}
+    base-url: ${INVENTORY_SERVICE_URL:${MS_INVENTARIO_URL:http://internal-agrocenter-bff-alb:8080}}
   sales:
-    base-url: ${SALES_SERVICE_URL:${MS_VENTAS_URL:http://ms-ventas-svc:8082}}
+    base-url: ${SALES_SERVICE_URL:${MS_VENTAS_URL:http://internal-agrocenter-bff-alb:8080}}
   purchases:
-    base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://ms-compras-svc:8083}}
+    base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://internal-agrocenter-bff-alb:8080}}
 
 springdoc:
   api-docs:

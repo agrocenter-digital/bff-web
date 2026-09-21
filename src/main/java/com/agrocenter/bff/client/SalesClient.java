@@ -33,7 +33,7 @@ public class SalesClient {
     public SaleCreationResponse create(String idempotencyKey, CreateSaleRequest request) {
         ResponseEntity<SaleResponse> response = executor.execute("ms-ventas", "crear venta", () ->
                 restClient.post()
-                        .uri("/api/ventas/")
+                        .uri("/api/ventas")
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(request)
@@ -61,7 +61,7 @@ public class SalesClient {
     }
 
     public PageResponse<SaleResponse> listAll(int page, int size) {
-        return list("/api/ventas/", page, size, "listar ventas");
+        return list("/api/ventas", page, size, "listar ventas");
     }
 
     private PageResponse<SaleResponse> list(String path, int page, int size, String operation) {

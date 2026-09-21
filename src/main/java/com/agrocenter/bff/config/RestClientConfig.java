@@ -98,12 +98,7 @@ public class RestClientConfig {
 
     private String sanitizeBaseUrl(String url, String service) {
         if (url == null || url.isBlank() || ServiceProperties.isUnresolvedPlaceholder(url)) {
-            return switch (service) {
-                case "ms-inventario" -> "http://ms-inventario-svc:8081";
-                case "ms-ventas" -> "http://ms-ventas-svc:8082";
-                case "ms-compras" -> "http://ms-compras-svc:8083";
-                default -> "http://localhost:8080";
-            };
+            return "http://internal-agrocenter-bff-alb:8080";
         }
         String clean = url.trim().replaceAll("/+$", "");
         if ("ms-inventario".equals(service)) {
