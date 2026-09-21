@@ -15,6 +15,7 @@ public record ProductUpdateRequest(
         @Size(max = 500) String descripcion,
         @NotBlank @Size(max = 80) String categoria,
         @NotNull @DecimalMin("0.00") @Digits(integer = 13, fraction = 2) BigDecimal precioVenta,
-        @NotNull @PositiveOrZero Integer stockMinimo
+        @NotNull @PositiveOrZero Integer stockMinimo,
+        @PositiveOrZero Integer stockActual
 ) {
 }
