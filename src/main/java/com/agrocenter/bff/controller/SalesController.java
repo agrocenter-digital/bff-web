@@ -37,8 +37,12 @@ public class SalesController {
         this.salesClient = salesClient;
     }
 
-    @PostMapping("/ventas")
-    @PreAuthorize("hasRole('CLIENTE')")
+    @PostMapping({
+            "/ventas", "/ventas/",
+            "/checkout", "/checkout/",
+            "/pedidos", "/pedidos/"
+    })
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public ResponseEntity<SaleResponse> create(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 100) String idempotencyKey,
             @Valid @RequestBody CreateSaleRequest request
@@ -56,8 +60,8 @@ public class SalesController {
         return ResponseEntity.created(location).body(result.sale());
     }
 
-    @GetMapping("/ventas/mis-pedidos")
-    @PreAuthorize("hasRole('CLIENTE')")
+    @GetMapping({"/ventas/mis-pedidos", "/ventas/mis-pedidos/", "/pedidos/mis-pedidos", "/mis-pedidos"})
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public PageResponse<SaleResponse> mine(
             @RequestParam(defaultValue = "0") @Min(0) int pagina,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int tamanio
