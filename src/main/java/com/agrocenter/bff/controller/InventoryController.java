@@ -31,7 +31,7 @@ import java.util.List;
 
 @Validated
 @RestController
-@RequestMapping("/api/bff/inventario")
+@RequestMapping({"/api/bff/inventario", "/api/bff/admin/inventario"})
 @PreAuthorize("hasRole('ADMIN')")
 public class InventoryController {
 
