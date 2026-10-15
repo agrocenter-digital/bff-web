@@ -98,7 +98,14 @@ public class RestClientConfig {
 
     private String sanitizeBaseUrl(String url, String service) {
         if (url == null || url.isBlank() || ServiceProperties.isUnresolvedPlaceholder(url)) {
-            return "http://internal-agrocenter-bff-alb:8080";
+            if ("ms-inventario".equals(service)) {
+                return "http://ms-inventario:8081";
+            } else if ("ms-ventas".equals(service)) {
+                return "http://ms-ventas:8082";
+            } else if ("ms-compras".equals(service)) {
+                return "http://ms-compras:8083";
+            }
+            return "http://localhost:8081";
         }
         String clean = url.trim().replaceAll("/+$", "");
         if ("ms-inventario".equals(service)) {

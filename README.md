@@ -16,58 +16,52 @@ flowchart TD
         Cognito["AWS Cognito User Pool\n+ Google Identity Federation"]
     end
 
-    subgraph Perimetro["Perímetro AWS & Balanceo"]
-        APIGW["AWS API Gateway / ALB Público"]
-        InternalALB["Router ALB Interno (Puerto 8080)\ninternal-agrocenter-bff-alb"]
+    subgraph Internet["Clientes & Edge"]
+        User["Usuario / Navegador Web"]
+        Vercel["Frontend Next.js (Vercel Edge CDN)\nhttps://front-web-seven.vercel.app"]
+        Cognito["AWS Cognito User Pool\n+ Google Identity Federation"]
     end
 
-    subgraph ClusterECS["AWS ECS Fargate Cluster"]
-        BFF["agrocenter-bff (BFF Web)\nTarget Group: agrocenter-bff-tg (/*)"]
-        MS_INV["agrocenter-ms-inventario (Puerto 8081)\nTarget Group: tg-ms-inventario (/api/inventario/*)"]
-        MS_VEN["agrocenter-ms-ventas (Puerto 8082)\nTarget Group: tg-ms-ventas (/api/ventas/*)"]
-        MS_COM["agrocenter-ms-compras (Puerto 8083)\nTarget Group: tg-ms-compras (/api/compras/*)"]
-    end
-
-    subgraph BasesDatos["Capa de Persistencia (Amazon RDS / PostgreSQL)"]
-        DB_INV[("db_inventario")]
-        DB_VEN[("db_ventas")]
-        DB_COM[("db_compras")]
+    subgraph EC2Host["Instancia EC2 Monolítica (Subred Pública / VPC Default AWS Academy)"]
+        subgraph DockerBridge["Red Docker Interna (agrocenter-network)"]
+            BFF["agrocenter-bff (BFF Web)\nPuerto 8080 (Expuesto a Vercel)"]
+            MS_INV["agrocenter-ms-inventario\nPuerto 8081"]
+            MS_VEN["agrocenter-ms-ventas\nPuerto 8082"]
+            MS_COM["agrocenter-ms-compras\nPuerto 8083"]
+            DB_PG[("PostgreSQL 16 Multi-DB\ndb_inventario, db_ventas, db_compras")]
+        end
     end
 
     %% Relaciones
     User -->|Navega / Consulta| Vercel
     User -->|Login OAuth2 / PKCE| Cognito
     Cognito -->|Access Token JWT| User
-    Vercel -->|Bearer JWT + Headers| APIGW
-    APIGW --> InternalALB
+    Vercel -->|HTTPS/HTTP Bearer JWT| BFF
 
-    %% Enrutamiento del ALB
-    InternalALB -->|Ruta por defecto /*| BFF
-    InternalALB -->|Path /api/inventario/*| MS_INV
-    InternalALB -->|Path /api/ventas/*| MS_VEN
-    InternalALB -->|Path /api/compras/*| MS_COM
+    %% Comunicación interna en Docker
+    BFF -->|http://ms-inventario:8081| MS_INV
+    BFF -->|http://ms-ventas:8082| MS_VEN
+    BFF -->|http://ms-compras:8083| MS_COM
+    MS_VEN -->|http://ms-inventario:8081| MS_INV
+    MS_COM -->|http://ms-inventario:8081| MS_INV
 
-    %% Comunicación BFF hacia microservicios
-    BFF -.->|Llamadas HTTP internas vía ALB| InternalALB
-
-    %% Persistencia Database-per-Service
-    MS_INV --> DB_INV
-    MS_VEN --> DB_VEN
-    MS_COM --> DB_COM
+    %% Persistencia
+    MS_INV --> DB_PG
+    MS_VEN --> DB_PG
+    MS_COM --> DB_PG
 ```
 
 ### Recorrido de una Petición
-1. **Frontend (Vercel)**: La SPA React / Next.js alojada en Vercel (`https://front-web-seven.vercel.app/`) obtiene la sesión del usuario contra **AWS Cognito** (soportando usuarios directos y federados mediante Google).
-2. **Invocación Segura**: Las peticiones salen con el encabezado HTTP `Authorization: Bearer <accessToken>` hacia el punto de entrada de la API.
+1. **Frontend (Vercel)**: La SPA React / Next.js alojada en Vercel (`https://front-web-seven.vercel.app/`) obtiene la sesión del usuario contra **AWS Cognito** (usuarios directos y Google Identity Federation).
+2. **Invocación Segura**: Las peticiones salen con el encabezado HTTP `Authorization: Bearer <accessToken>` hacia la IP pública de la EC2 en el puerto `8080` (o vía el proxy interno de Next.js en Vercel).
 3. **CORS & Perímetro**: El BFF valida la solicitud contra la lista blanca de orígenes de Vercel y entornos locales.
-4. **Enrutamiento Interno (AWS Academy Learner Lab)**:
-   - Ante las restricciones de IAM en el entorno educativo (sin permisos para Route 53 privado o Service Connect / Cloud Map), se implementó un **Application Load Balancer interno (`internal-agrocenter-bff-alb`)** escuchando en el puerto `8080`.
-   - Utiliza **Path-Based Routing** para direccionar el tráfico a los Target Groups correspondientes:
-     * `/api/inventario/*` $\rightarrow$ Target Group `tg-ms-inventario` (puerto 8081).
-     * `/api/ventas/*` $\rightarrow$ Target Group `tg-ms-ventas` (puerto 8082).
-     * `/api/compras/*` $\rightarrow$ Target Group `tg-ms-compras` (puerto 8083).
-     * Regla por defecto (`/*`) $\rightarrow$ Target Group `agrocenter-bff-tg` (puerto 8080).
-5. **Aislamiento de Datos (Database-per-Service)**: Cada microservicio corre en tareas dedicadas de AWS ECS Fargate y solo se conecta a su base de datos PostgreSQL asignada.
+4. **Enrutamiento Interno en EC2**:
+   - Todo el backend convive en una **única instancia EC2** en una subred pública de la VPC por defecto de AWS Academy.
+   - Los servicios se comunican a través de una red puente Docker (`agrocenter-network`) utilizando resolución DNS interna por nombre de contenedor:
+     * `http://ms-inventario:8081`
+     * `http://ms-ventas:8082`
+     * `http://ms-compras:8083`
+5. **Aislamiento de Datos (Database-per-Service)**: Cada microservicio se conecta a su base de datos asignada (`db_inventario`, `db_ventas`, `db_compras`), gestionadas en PostgreSQL.
 
 ---
 
@@ -160,9 +154,9 @@ Todos los endpoints se exponen bajo el prefijo `/api/bff`:
 | `COGNITO_JWK_SET_URI` | **Sí** | Endpoint público JWKS de Cognito | `${COGNITO_ISSUER_URI}/.well-known/jwks.json` |
 | `COGNITO_AUDIENCE` | **Sí** | App Client ID aceptado | `tu_cognito_app_client_id` |
 | `ALLOWED_ORIGINS` | **Sí** | Lista blanca CORS para frontend | `https://front-web-seven.vercel.app,http://localhost:3000` |
-| `MS_INVENTARIO_URL` | **Sí** | URL base de inventario (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
-| `MS_VENTAS_URL` | **Sí** | URL base de ventas (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
-| `MS_COMPRAS_URL` | **Sí** | URL base de compras (vía ALB o DNS) | `http://internal-agrocenter-bff-alb-...:8080` |
+| `MS_INVENTARIO_URL` | **Sí** | URL base de inventario (Docker DNS o IP) | `http://ms-inventario:8081` |
+| `MS_VENTAS_URL` | **Sí** | URL base de ventas (Docker DNS o IP) | `http://ms-ventas:8082` |
+| `MS_COMPRAS_URL` | **Sí** | URL base de compras (Docker DNS o IP) | `http://ms-compras:8083` |
 | `MS_INVENTARIO_CONNECT_TIMEOUT` | No | Timeout de conexión HTTP | `2s` |
 | `MS_INVENTARIO_RESPONSE_TIMEOUT` | No | Timeout de lectura HTTP | `5s` |
 
