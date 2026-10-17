@@ -15,6 +15,7 @@ public record ProductResponse(
         boolean stockBajo,
         boolean activo,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        boolean soloCotizacion
 ) {
 }

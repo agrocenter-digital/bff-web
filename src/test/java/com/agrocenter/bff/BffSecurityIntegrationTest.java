@@ -231,7 +231,8 @@ class BffSecurityIntegrationTest {
                 lowStock,
                 true,
                 Instant.parse("2026-08-28T12:00:00Z"),
-                Instant.parse("2026-08-28T12:00:00Z")
+                Instant.parse("2026-08-28T12:00:00Z"),
+                false
         );
     }
 }
