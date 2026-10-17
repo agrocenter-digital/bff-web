@@ -28,20 +28,22 @@ public class ForwardedHeadersInterceptor implements ClientHttpRequestInterceptor
             ClientHttpRequestExecution execution
     ) throws IOException {
         HttpServletRequest servletRequest = null;
-        boolean isPublicCatalogRequest = false;
+        boolean isPublicRequest = false;
 
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             servletRequest = attributes.getRequest();
             String incomingUri = servletRequest.getRequestURI();
-            if (incomingUri != null && (incomingUri.equals("/api/bff/catalogo") || incomingUri.startsWith("/api/bff/catalogo/"))) {
-                isPublicCatalogRequest = true;
+            if (incomingUri != null && (incomingUri.equals("/api/bff/catalogo") || incomingUri.startsWith("/api/bff/catalogo/")
+                    || incomingUri.equals("/api/bff/consultas") || incomingUri.startsWith("/api/bff/consultas/"))) {
+                isPublicRequest = true;
             }
         }
 
-        // Para el catálogo público no se exige ni propaga token downstream, permitiendo
-        // acceso anónimo limpio sin que el microservicio falle por credenciales inválidas.
-        // En rutas privadas, se propaga el Bearer token recibido desde el frontend o contexto.
-        if (!isPublicCatalogRequest) {
+        // Para el catálogo público y el alta de consultas B2B no se exige ni propaga token
+        // downstream, permitiendo acceso anónimo limpio sin que el microservicio falle por
+        // credenciales inválidas. En rutas privadas, se propaga el Bearer token recibido desde
+        // el frontend o contexto.
+        if (!isPublicRequest) {
             String token = null;
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null

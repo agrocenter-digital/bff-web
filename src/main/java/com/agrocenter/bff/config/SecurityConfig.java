@@ -52,6 +52,9 @@ public class SecurityConfig {
                         // Catálogo público (solo lectura GET para clientes anónimos)
                         .requestMatchers(HttpMethod.GET, "/api/bff/catalogo", "/api/bff/catalogo/**").permitAll()
 
+                        // Consultas B2B y contacto: alta pública sin autenticación
+                        .requestMatchers(HttpMethod.POST, "/api/bff/consultas", "/api/bff/consultas/").permitAll()
+
                         // Preflights de CORS para el navegador
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 

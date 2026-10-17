@@ -1,9 +1,12 @@
 package com.agrocenter.bff;
 
+import com.agrocenter.bff.client.ConsultasClient;
 import com.agrocenter.bff.client.InventoryClient;
 import com.agrocenter.bff.client.PurchasesClient;
 import com.agrocenter.bff.client.SalesClient;
 import com.agrocenter.bff.dto.common.PageResponse;
+import com.agrocenter.bff.dto.consultas.ConsultaB2BRequest;
+import com.agrocenter.bff.dto.consultas.ConsultaB2BResponse;
 import com.agrocenter.bff.dto.inventory.ProductResponse;
 import com.agrocenter.bff.dto.purchases.CreatePurchaseRequest;
 import com.agrocenter.bff.dto.purchases.PurchaseDetailResponse;
@@ -56,6 +59,9 @@ class BffSecurityIntegrationTest {
 
     @MockitoBean
     private PurchasesClient purchasesClient;
+
+    @MockitoBean
+    private ConsultasClient consultasClient;
 
     @Test
     void publicCatalogWithoutTokenReturns200() throws Exception {
@@ -216,6 +222,83 @@ class BffSecurityIntegrationTest {
                 .andExpect(jsonPath("$.inventario.productosStockBajo").value(2))
                 .andExpect(jsonPath("$.ventas.ventasRegistradas").value(27))
                 .andExpect(jsonPath("$.compras.comprasRegistradas").value(2));
+    }
+
+    @Test
+    void publicConsultaCreationWithoutTokenReturns201() throws Exception {
+        given(consultasClient.crear(any(ConsultaB2BRequest.class))).willReturn(consulta(8L));
+
+        mockMvc.perform(post("/api/bff/consultas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "skuProducto": "MAY-001",
+                                  "nombreProducto": "Big Bag urea",
+                                  "cantidad": 5,
+                                  "nombreCliente": "Camila Munoz",
+                                  "correoContacto": "camila@agrocenter.cl",
+                                  "mensaje": "Necesito cotizacion mayorista",
+                                  "origen": "PRODUCTO_MAYORISTA"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("Location"))
+                .andExpect(jsonPath("$.id").value(8))
+                .andExpect(jsonPath("$.estado").value("PENDIENTE"));
+    }
+
+    @Test
+    void invalidConsultaReturns400BeforeCallingClient() throws Exception {
+        mockMvc.perform(post("/api/bff/consultas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombreCliente":"A","correoContacto":"no-mail","mensaje":"corto","origen":""}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void adminConsultasWithoutTokenReturns401() throws Exception {
+        mockMvc.perform(get("/api/bff/admin/consultas"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void clientCannotListConsultas() throws Exception {
+        mockMvc.perform(get("/api/bff/admin/consultas").with(jwt().authorities(
+                        () -> "ROLE_CLIENTE"
+                )))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void adminListsConsultas() throws Exception {
+        given(consultasClient.listar(null)).willReturn(List.of(consulta(8L)));
+
+        mockMvc.perform(get("/api/bff/admin/consultas").with(jwt().authorities(
+                        () -> "ROLE_ADMIN"
+                )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(8))
+                .andExpect(jsonPath("$[0].correoContacto").value("camila@agrocenter.cl"));
+    }
+
+    private ConsultaB2BResponse consulta(Long id) {
+        return new ConsultaB2BResponse(
+                id,
+                "MAY-001",
+                "Big Bag urea",
+                5,
+                "Camila Munoz",
+                "camila@agrocenter.cl",
+                "Necesito cotizacion mayorista",
+                "PRODUCTO_MAYORISTA",
+                "PENDIENTE",
+                Instant.parse("2026-08-28T12:00:00Z")
+        );
     }
 
     private ProductResponse product(long id, boolean lowStock) {
