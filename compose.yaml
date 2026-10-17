@@ -11,6 +11,9 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev,docker}
+      DB_URL: ${DB_URL:-jdbc:postgresql://host.docker.internal:5432/db_bff}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DEV_JWT_SECRET: ${DEV_JWT_SECRET:?Configura DEV_JWT_SECRET en el archivo .env}
       DEV_JWT_ISSUER: ${DEV_JWT_ISSUER:-http://localhost:8081/dev-issuer}
       COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:-https://cognito-idp.us-east-1.amazonaws.com/us-east-1_DBCBjL67J}

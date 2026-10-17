@@ -3,32 +3,34 @@ package com.agrocenter.bff.service;
 import com.agrocenter.bff.config.MessagingProperties;
 import com.agrocenter.bff.dto.messaging.RoutingRuleRequest;
 import com.agrocenter.bff.dto.messaging.RoutingRuleResponse;
+import com.agrocenter.bff.entity.ReglaNegocio;
+import com.agrocenter.bff.repository.ReglaNegocioRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class ReglasEncaminamientoService {
 
-    private final Map<String, RoutingRuleResponse> reglas = new ConcurrentHashMap<>();
-    private final AtomicLong secuencia = new AtomicLong();
+    private final ReglaNegocioRepository repository;
     private final MessagingProperties properties;
 
-    public ReglasEncaminamientoService(MessagingProperties properties) {
+    public ReglasEncaminamientoService(ReglaNegocioRepository repository, MessagingProperties properties) {
+        this.repository = repository;
         this.properties = properties;
     }
 
+    @Transactional(readOnly = true)
     public List<RoutingRuleResponse> listar() {
-        return reglas.values().stream()
-                .sorted(Comparator.comparing(RoutingRuleResponse::fechaCreacion).reversed())
+        return repository.findAll(Sort.by(Sort.Direction.DESC, "fechaCreacion"))
+                .stream()
+                .map(this::toResponse)
                 .toList();
     }
 
+    @Transactional
     public RoutingRuleResponse crear(RoutingRuleRequest request) {
         String origen = request.topicoOrigen().trim();
         if (!properties.topicos().contains(origen)) {
@@ -37,26 +39,47 @@ public class ReglasEncaminamientoService {
             );
         }
 
-        String destino = normalizar(request.topicoDestino());
         String estado = request.estado() == null || request.estado().isBlank() ? "ACTIVA" : request.estado();
-
-        String id = "REGLA-" + secuencia.incrementAndGet();
-        RoutingRuleResponse regla = new RoutingRuleResponse(
-                id,
+        ReglaNegocio regla = new ReglaNegocio(
                 request.nombre().trim(),
                 origen,
-                destino,
+                normalizar(request.topicoDestino()),
                 normalizar(request.condicion()),
-                estado,
                 normalizar(request.descripcion()),
-                Instant.now()
+                estado
         );
-        reglas.put(id, regla);
-        return regla;
+        return toResponse(repository.save(regla));
     }
 
+    @Transactional
     public boolean eliminar(String id) {
-        return reglas.remove(id) != null;
+        Long identificador = parsearId(id);
+        if (identificador == null || !repository.existsById(identificador)) {
+            return false;
+        }
+        repository.deleteById(identificador);
+        return true;
+    }
+
+    private Long parsearId(String id) {
+        try {
+            return Long.valueOf(id);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private RoutingRuleResponse toResponse(ReglaNegocio regla) {
+        return new RoutingRuleResponse(
+                String.valueOf(regla.getId()),
+                regla.getNombre(),
+                regla.getTopicoOrigen(),
+                regla.getTopicoDestino(),
+                regla.getCondicion(),
+                regla.getEstado(),
+                regla.getDescripcion(),
+                regla.getFechaCreacion()
+        );
     }
 
     private String normalizar(String valor) {
