@@ -1,5 +1,6 @@
 package com.agrocenter.bff.client;
 
+import com.agrocenter.bff.dto.purchases.ConfirmarPurchaseRequest;
 import com.agrocenter.bff.dto.purchases.CreatePurchaseRequest;
 import com.agrocenter.bff.dto.purchases.PurchaseResponse;
 import com.agrocenter.bff.exception.DownstreamException;
@@ -58,6 +59,20 @@ public class PurchasesClient {
         return executor.execute("ms-compras", "obtener compra", () ->
                 restClient.get()
                         .uri("/api/compras/{id}", id)
+                        .retrieve()
+                        .body(PurchaseResponse.class)
+        );
+    }
+
+    public PurchaseResponse confirmar(Long id, ConfirmarPurchaseRequest request) {
+        ConfirmarPurchaseRequest payload = request != null
+                ? request
+                : new ConfirmarPurchaseRequest(null, null, null, null);
+        return executor.execute("ms-compras", "confirmar compra", () ->
+                restClient.patch()
+                        .uri("/api/compras/{id}/confirmar", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(payload)
                         .retrieve()
                         .body(PurchaseResponse.class)
         );
