@@ -7,6 +7,8 @@ import com.agrocenter.bff.dto.inventory.ProductCreateRequest;
 import com.agrocenter.bff.dto.inventory.ProductResponse;
 import com.agrocenter.bff.dto.inventory.ProductStateRequest;
 import com.agrocenter.bff.dto.inventory.ProductUpdateRequest;
+import com.agrocenter.bff.dto.inventory.StockOperationRequest;
+import com.agrocenter.bff.dto.inventory.StockOperationResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -84,6 +86,11 @@ public class InventoryController {
             @Valid @RequestBody ProductStateRequest request
     ) {
         return inventoryClient.changeProductState(id, request);
+    }
+
+    @PostMapping("/stock/entrada")
+    public StockOperationResponse registrarEntrada(@Valid @RequestBody StockOperationRequest request) {
+        return inventoryClient.registrarEntrada(request);
     }
 
     @GetMapping("/movimientos")

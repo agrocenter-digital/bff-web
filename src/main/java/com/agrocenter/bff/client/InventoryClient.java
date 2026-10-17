@@ -7,6 +7,8 @@ import com.agrocenter.bff.dto.inventory.ProductResponse;
 import com.agrocenter.bff.dto.inventory.ProductStateRequest;
 import com.agrocenter.bff.dto.inventory.ProductStockResponse;
 import com.agrocenter.bff.dto.inventory.ProductUpdateRequest;
+import com.agrocenter.bff.dto.inventory.StockOperationRequest;
+import com.agrocenter.bff.dto.inventory.StockOperationResponse;
 import com.agrocenter.bff.exception.DownstreamException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
@@ -120,6 +122,17 @@ public class InventoryClient {
                         .body(request)
                         .retrieve()
                         .body(ProductResponse.class)
+        );
+    }
+
+    public StockOperationResponse registrarEntrada(StockOperationRequest request) {
+        return executor.execute("ms-inventario", "registrar entrada de stock", () ->
+                restClient.post()
+                        .uri("/api/inventario/stock/entrada")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request)
+                        .retrieve()
+                        .body(StockOperationResponse.class)
         );
     }
 
