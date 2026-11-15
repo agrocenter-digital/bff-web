@@ -62,6 +62,14 @@ services:
     base-url: ${PURCHASES_SERVICE_URL:${MS_COMPRAS_URL:http://localhost:8083}}
     connect-timeout: ${MS_COMPRAS_CONNECT_TIMEOUT:5s}
     response-timeout: ${MS_COMPRAS_RESPONSE_TIMEOUT:20s}
+  analytics:
+    base-url: ${ANALYTICS_SERVICE_URL:http://localhost:8084}
+    connect-timeout: ${MS_ANALITICAS_CONNECT_TIMEOUT:5s}
+    response-timeout: ${MS_ANALITICAS_RESPONSE_TIMEOUT:10s}
+  audit:
+    base-url: ${AUDIT_SERVICE_URL:http://localhost:8086}
+    connect-timeout: ${MS_AUDITORIA_CONNECT_TIMEOUT:5s}
+    response-timeout: ${MS_AUDITORIA_RESPONSE_TIMEOUT:10s}
 
 management:
   endpoints:

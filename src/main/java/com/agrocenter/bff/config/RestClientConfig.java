@@ -3,6 +3,7 @@ package com.agrocenter.bff.config;
 import com.agrocenter.bff.client.DownstreamErrorMapper;
 import com.agrocenter.bff.client.ForwardedHeadersInterceptor;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatusCode;
@@ -10,6 +11,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
+import java.time.Duration;
 
 @Configuration
 public class RestClientConfig {
@@ -63,6 +65,26 @@ public class RestClientConfig {
                 forwardedHeadersInterceptor,
                 errorMapper
         );
+    }
+
+    @Bean
+    @Qualifier("analyticsRestClient")
+    RestClient analyticsRestClient(RestClient.Builder builder, ForwardedHeadersInterceptor interceptor,
+                                   DownstreamErrorMapper errorMapper,
+                                   @Value("${services.analytics.base-url:http://localhost:8084}") String url,
+                                   @Value("${services.analytics.connect-timeout:5s}") Duration connect,
+                                   @Value("${services.analytics.response-timeout:10s}") Duration response) {
+        return build(builder, new ServiceProperties.Endpoint(url, connect, response), "ms-analiticas", interceptor, errorMapper);
+    }
+
+    @Bean
+    @Qualifier("auditRestClient")
+    RestClient auditRestClient(RestClient.Builder builder, ForwardedHeadersInterceptor interceptor,
+                               DownstreamErrorMapper errorMapper,
+                               @Value("${services.audit.base-url:http://localhost:8086}") String url,
+                               @Value("${services.audit.connect-timeout:5s}") Duration connect,
+                               @Value("${services.audit.response-timeout:10s}") Duration response) {
+        return build(builder, new ServiceProperties.Endpoint(url, connect, response), "ms-auditoria", interceptor, errorMapper);
     }
 
     private RestClient build(
