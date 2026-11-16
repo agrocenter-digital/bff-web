@@ -3,10 +3,8 @@ package com.agrocenter.bff.controller;
 import com.agrocenter.bff.dto.messaging.EventosTrazabilidadResponse;
 import com.agrocenter.bff.dto.messaging.RoutingRuleRequest;
 import com.agrocenter.bff.dto.messaging.RoutingRuleResponse;
-import com.agrocenter.bff.dto.messaging.TopicStatusResponse;
 import com.agrocenter.bff.service.MessagingQueryService;
 import com.agrocenter.bff.service.ReglasEncaminamientoService;
-import com.agrocenter.bff.service.TopicAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,24 +32,21 @@ import java.util.List;
 @Tag(name = "Administracion de Mensajeria", description = "Gestion de topicos, reglas de encaminamiento y trazas de eventos")
 public class MessagingAdminController {
 
-    private final TopicAdminService topicAdminService;
     private final ReglasEncaminamientoService reglasService;
     private final MessagingQueryService messagingQueryService;
 
     public MessagingAdminController(
-            TopicAdminService topicAdminService,
             ReglasEncaminamientoService reglasService,
             MessagingQueryService messagingQueryService
     ) {
-        this.topicAdminService = topicAdminService;
         this.reglasService = reglasService;
         this.messagingQueryService = messagingQueryService;
     }
 
     @GetMapping("/topicos")
-    @Operation(summary = "Consultar el estado y las particiones de los topicos de Kafka")
-    public List<TopicStatusResponse> topicos() {
-        return topicAdminService.describirTopicos();
+    @Operation(summary = "Ruta retirada: los tópicos Kafka no representan Kinesis", deprecated = true)
+    public ResponseEntity<Void> topicos() {
+        return ResponseEntity.status(410).build();
     }
 
     @GetMapping("/reglas")

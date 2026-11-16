@@ -82,6 +82,16 @@ class BffSecurityIntegrationTest {
     }
 
     @Test
+    void retiredKafkaTopicsRemainAdminOnlyAndReturnGone() throws Exception {
+        String url = "/api/bff/admin/mensajeria/topicos";
+        mockMvc.perform(get(url)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(url).with(jwt().authorities(() -> "ROLE_CLIENTE")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(url).with(jwt().authorities(() -> "ROLE_ADMIN")))
+                .andExpect(status().isGone());
+    }
+
+    @Test
     void fakeTokenReturns401() throws Exception {
         given(jwtDecoder.decode("fake-token")).willThrow(new BadJwtException("invalid signature"));
 
