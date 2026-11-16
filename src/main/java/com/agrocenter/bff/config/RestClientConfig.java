@@ -78,6 +78,14 @@ public class RestClientConfig {
     }
 
     @Bean
+    @Qualifier("kinesisAdminRestClient")
+    RestClient kinesisAdminRestClient(RestClient.Builder builder, ForwardedHeadersInterceptor interceptor,
+                                     DownstreamErrorMapper errorMapper,
+                                     @Value("${services.kinesis-admin.base-url:http://localhost:8087}") String url) {
+        return build(builder, new ServiceProperties.Endpoint(url, Duration.ofSeconds(5), Duration.ofSeconds(15)), "ms-kinesis-admin", interceptor, errorMapper);
+    }
+
+    @Bean
     @Qualifier("auditRestClient")
     RestClient auditRestClient(RestClient.Builder builder, ForwardedHeadersInterceptor interceptor,
                                DownstreamErrorMapper errorMapper,
